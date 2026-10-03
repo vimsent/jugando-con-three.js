@@ -127,6 +127,12 @@ export class SceneLights {
     return this.params.skyIntensity * (0.15 + 0.85 * MathUtils.smoothstep(this.sunDirection.y, -0.05, 0.4));
   }
 
+  /** Identifies the lighting configuration (used to key reference images). */
+  get stateKey(): string {
+    const p = this.params;
+    return [p.hour.toFixed(3), p.sunIntensity, p.skyIntensity, p.pointIntensity, p.pointShadows ? 1 : 0, this.pointPhase.toFixed(3)].join(',');
+  }
+
   getState(): Record<string, unknown> {
     return { ...this.params, pointPhase: this.pointPhase };
   }

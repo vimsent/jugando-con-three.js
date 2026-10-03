@@ -3,3 +3,4 @@ dist/
 public/assets/sponza/
 results/raw/
 *.log
+results/.pw-profile/

@@ -29,6 +29,7 @@ export class GpuTimer {
   private pending: PassRange[] = [];
   private resolving = false;
   private cpuStart = new Map<string, number>();
+  private minFrame = 0;
   // Latest per-pass times (ms) and exponential moving averages.
   readonly last = new Map<string, number>();
   readonly avg = new Map<string, number>();
@@ -88,6 +89,7 @@ export class GpuTimer {
         }
         const perFrame = new Map<number, Map<string, number>>();
         for (const r of ranges) {
+          if (r.frame < this.minFrame) continue;
           let sum = 0;
           let found = false;
           for (const p of parsed) {
@@ -120,5 +122,7 @@ export class GpuTimer {
   resetAverages(): void {
     this.avg.clear();
     this.last.clear();
+    // Ignore timings of frames submitted before the reset that resolve later.
+    this.minFrame = this.renderer.info.frame + 1;
   }
 }

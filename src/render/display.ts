@@ -1,4 +1,10 @@
-import { Texture } from 'three';
+import { DataTexture, HalfFloatType, RGBAFormat, Texture } from 'three';
+
+function blank(): DataTexture {
+  const t = new DataTexture(new Uint16Array(4), 1, 1, RGBAFormat, HalfFloatType);
+  t.needsUpdate = true;
+  return t;
+}
 import { NodeMaterial, QuadMesh, type Node, type WebGPURenderer } from 'three/webgpu';
 import {
   Fn, abs, acesFilmicToneMapping, clamp, dot, float, mix, select, smoothstep, texture, uniform, uv, vec3, vec4,
@@ -35,6 +41,13 @@ export class Display {
     reference: texture(new Texture()),
   };
   private readonly bound = new Map<string, Texture>();
+  // One distinct placeholder per optional input: three.js shares a binding between texture nodes
+  // that point at the same texture, so two inputs must never alias the same texture.
+  private readonly placeholders = {
+    finalB: blank(),
+    indirectB: blank(),
+    reference: blank(),
+  };
   private readonly hasRef = uniform(0);
 
   constructor(gbuffer: GBuffer) {
@@ -83,9 +96,9 @@ export class Display {
     const dirty = [
       this.bind('finalA', inputs.finalA),
       this.bind('indirectA', inputs.indirectA),
-      this.bind('finalB', inputs.finalB ?? inputs.finalA),
-      this.bind('indirectB', inputs.indirectB ?? inputs.indirectA),
-      this.bind('reference', inputs.reference ?? inputs.finalA),
+      this.bind('finalB', inputs.finalB ?? this.placeholders.finalB),
+      this.bind('indirectB', inputs.indirectB ?? this.placeholders.indirectB),
+      this.bind('reference', inputs.reference ?? this.placeholders.reference),
     ].some(Boolean);
     this.hasRef.value = inputs.reference ? 1 : 0;
     if (dirty) this.material.needsUpdate = true;

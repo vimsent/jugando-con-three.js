@@ -15,7 +15,10 @@ import { GpuTimer } from './metrics/gpuTimer';
 import { Hud } from './ui/hud';
 import { METHODS, findMethod, type MethodEntry } from './gi/registry';
 import type { FrameInfo, GIContext, GIMethod } from './gi/types';
-import type { RTScene } from './rt/rtScene';
+import { RTScene } from './rt/rtScene';
+import { ErrorMetric, type ErrorResult } from './metrics/error';
+import { ReferenceCache, type ReferenceEntry } from './metrics/referenceCache';
+import type { ReferencePathTracer } from './gi/reference';
 
 interface ActiveMethod {
   entry: MethodEntry;
@@ -39,6 +42,9 @@ export class App {
   hud: Hud;
   gui!: GUI;
 
+  errorMetric!: ErrorMetric;
+  refCache!: ReferenceCache;
+  lastError: ErrorResult | null = null;
   methodA: ActiveMethod | null = null;
   methodB: ActiveMethod | null = null;
   readonly settings = {
@@ -46,7 +52,7 @@ export class App {
     compare: 'ninguno',
     view: 'final' as ViewMode,
     split: 0.5,
-    exposure: 1.0,
+    exposure: 1.6,
     bookmark: 0,
     paused: false,
   };
@@ -105,6 +111,8 @@ export class App {
     this.compositeA = new Composite(this.gbuffer, this.camera, this.sky);
     this.compositeB = new Composite(this.gbuffer, this.camera, this.sky);
     this.display = new Display(this.gbuffer);
+    this.errorMetric = new ErrorMetric(this.gbuffer);
+    this.refCache = new ReferenceCache(RENDER_WIDTH, RENDER_HEIGHT);
 
     this.buildGui();
     this.bindKeys();
@@ -128,7 +136,16 @@ export class App {
   }
 
   getRTScene(): Promise<RTScene> {
-    if (!this.rtScenePromise) this.rtScenePromise = Promise.reject(new Error('RT scene: hito (b)'));
+    if (!this.rtScenePromise) {
+      this.rtScenePromise = (async () => {
+        this.setStatus('Construyendo BVH…');
+        await new Promise((r) => setTimeout(r, 0));
+        const rt = new RTScene(this.sponza);
+        console.info(`BVH: ${rt.triangleCount} triángulos, ${(rt.buildMs / 1000).toFixed(2)} s, ${(rt.memoryBytes / 2 ** 20).toFixed(1)} MiB`);
+        this.setStatus('');
+        return rt;
+      })();
+    }
     return this.rtScenePromise;
   }
 
@@ -213,16 +230,26 @@ export class App {
       this.compositeB.render(renderer, indirectB);
     }
 
-    this.display.split.value = this.methodB ? this.settings.split : 1;
+    // Reference image for this camera + light state, if one was generated.
+    const ref = this.currentReference();
+    if (ref && this.methodA!.entry.key !== 'reference') {
+      timer.begin('métrica (no GI)');
+      this.errorMetric.run(renderer, this.compositeA.target.texture, ref.final, this.frame);
+      timer.end('métrica (no GI)');
+    }
+    this.lastError = ref ? this.errorMetric.last : null;
+
+    const compareRef = this.settings.compare === 'ref-img' && ref;
+    this.display.split.value = this.methodB || compareRef ? this.settings.split : 1;
     this.display.exposure.value = this.settings.exposure;
     this.display.setModeByName(this.settings.view);
     timer.begin('display');
     this.display.render(renderer, {
       finalA: this.compositeA.target.texture,
       indirectA,
-      finalB: this.methodB ? this.compositeB.target.texture : null,
-      indirectB,
-      reference: null,
+      finalB: this.methodB ? this.compositeB.target.texture : compareRef ? ref.final : null,
+      indirectB: this.methodB ? indirectB : compareRef ? ref.indirect : null,
+      reference: ref ? ref.final : null,
     });
     timer.end('display');
     timer.resolve();
@@ -233,7 +260,8 @@ export class App {
     const a = this.methodA!;
     const stats = a.method.stats();
     const passes = [...this.timer.avg.entries()];
-    const total = passes.reduce((s, [, v]) => s + v, 0);
+    const total = passes.filter(([k]) => !k.includes('no GI')).reduce((s, [, v]) => s + v, 0);
+    const ref = this.currentReference();
     this.hud.update({
       method: `${a.entry.hotkey}. ${a.entry.label}`,
       compare: this.methodB ? this.methodB.entry.label : null,
@@ -245,11 +273,71 @@ export class App {
       timerSupported: this.timer.supported,
       rays: stats.raysPerFrame,
       memory: stats.memoryBytes,
-      error: null,
+      error: ref && this.lastError ? { rmse: this.lastError.rmse, rel: this.lastError.rel, refSamples: ref.spp } : null,
       converge: null,
       extra: stats.extra ?? {},
       status: this.status,
     });
+  }
+
+  // ---------------------------------------------------------------- references
+
+  get referenceKey(): string {
+    return ReferenceCache.key(this.settings.bookmark, this.lights.stateKey);
+  }
+
+  currentReference(): ReferenceEntry | undefined {
+    return this.refCache?.get(this.referenceKey);
+  }
+
+  /** Resolves after `n` more frames have been rendered. */
+  waitFrames(n: number): Promise<void> {
+    const target = this.frame + n;
+    return new Promise((resolve) => {
+      const poll = () => (this.frame >= target ? resolve() : requestAnimationFrame(poll));
+      poll();
+    });
+  }
+
+  /**
+   * Renders the ground truth for the current light state at the given bookmark(s) with the
+   * reference path tracer and stores it in the cache. Animations are paused meanwhile.
+   */
+  async generateReferences(bookmarks: number[] = [this.settings.bookmark], spp = 4096): Promise<{ key: string; spp: number; seconds: number }[]> {
+    const prevMethod = this.settings.method;
+    const prevBookmark = this.settings.bookmark;
+    const prevPaused = this.settings.paused;
+    this.settings.paused = true;
+    const out: { key: string; spp: number; seconds: number }[] = [];
+    try {
+      await this.setMethod('reference');
+      const ref = this.methodA!.method as ReferencePathTracer;
+      ref.params.targetSpp = spp;
+      for (const b of bookmarks) {
+        this.gotoBookmark(b);
+        const t0 = performance.now();
+        await this.waitFrames(1);
+        ref.reset();
+        while (ref.sampleCount < spp) {
+          this.setStatus(`Referencia cámara ${b + 1}: ${ref.sampleCount} / ${spp} spp`);
+          await this.waitFrames(1);
+        }
+        await this.waitFrames(1);
+        await this.refCache.store(
+          this.renderer,
+          { key: this.referenceKey, bookmark: b, lightKey: this.lights.stateKey, spp: ref.sampleCount },
+          this.compositeA.target.texture,
+          ref.outputTexture,
+        );
+        out.push({ key: this.referenceKey, spp: ref.sampleCount, seconds: (performance.now() - t0) / 1000 });
+      }
+    } finally {
+      this.setStatus('');
+      this.settings.paused = prevPaused;
+      await this.setMethod(prevMethod);
+      this.gotoBookmark(prevBookmark);
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- camera / UI
@@ -267,13 +355,19 @@ export class App {
     const g = gui.addFolder('General');
     const methodOptions = Object.fromEntries(METHODS.map((m) => [`${m.hotkey}. ${m.label}`, m.key]));
     g.add(this.settings, 'method', methodOptions).name('método A').onChange((k: string) => this.setMethod(k));
-    g.add(this.settings, 'compare', { ninguno: 'ninguno', ...methodOptions }).name('comparar con B').onChange((k: string) => this.setCompare(k));
+    g.add(this.settings, 'compare', { ninguno: 'ninguno', 'imagen de referencia': 'ref-img', ...methodOptions }).name('comparar con B').onChange((k: string) => this.setCompare(k));
     g.add(this.settings, 'split', 0, 1, 0.001).name('split A|B');
     g.add(this.settings, 'view', [...VIEW_MODES]).name('vista');
     g.add(this.settings, 'exposure', 0.05, 8, 0.01).name('exposición');
     g.add(this.settings, 'bookmark', Object.fromEntries(BOOKMARKS.map((b, i) => [`${i + 1}. ${b.name}`, i]))).name('cámara').onChange((i: number) => this.gotoBookmark(i));
     g.add(this.settings, 'paused').name('pausar animación');
     g.add(this.display.diffGain, 'value', 0.1, 50, 0.1).name('ganancia diferencia');
+
+    const r = gui.addFolder('Referencia');
+    const refOpts = { spp: 4096 };
+    r.add(refOpts, 'spp', 256, 65536, 256).name('spp');
+    r.add({ go: () => void this.generateReferences([this.settings.bookmark], refOpts.spp) }, 'go').name('generar (cámara actual)');
+    r.add({ go: () => void this.generateReferences(BOOKMARKS.map((_, i) => i), refOpts.spp) }, 'go').name('generar (5 cámaras)');
 
     const l = gui.addFolder('Luces');
     const p = this.lights.params;

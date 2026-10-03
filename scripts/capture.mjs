@@ -25,15 +25,18 @@ const stepsFile = arg('--steps-file', null);
 const steps = stepsFile ? JSON.parse(readFileSync(stepsFile, 'utf8')) : JSON.parse(arg('--steps', JSON.stringify(defaultSteps)));
 const timeoutMs = +arg('--timeout', '600000');
 
-const server = await createServer({ server: { port: 0, strictPort: false }, logLevel: 'error' });
+const server = await createServer({ server: { port: +arg('--port', '5199'), strictPort: true }, logLevel: 'error' });
 await server.listen();
 const url = server.resolvedUrls.local[0] + (arg('--query', '') ? '?' + arg('--query', '') : '');
 
-const browser = await chromium.launch({
+// Persistent profile so reference images cached in IndexedDB survive between runs.
+const profileDir = arg('--profile', 'results/.pw-profile');
+const browser = await chromium.launchPersistentContext(profileDir, {
   headless: !has('--headed'),
+  viewport: { width: 1280, height: 720 },
   args: ['--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=vulkan', '--ignore-gpu-blocklist', '--enable-gpu'],
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const page = browser.pages()[0] ?? (await browser.newPage());
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));

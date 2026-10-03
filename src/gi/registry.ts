@@ -1,5 +1,6 @@
 import type { GIMethod } from './types';
 import { FlatAmbient } from './flat';
+import { ReferencePathTracer } from './reference';
 
 export interface MethodEntry {
   /** Hotkey digit (0 = reference). */
@@ -9,9 +10,10 @@ export interface MethodEntry {
   create: () => Promise<GIMethod>;
 }
 
-// Methods are created lazily (dynamic imports) and disposed when switched away from, so that the
+// Methods are created lazily and disposed when switched away from, so that the
 // memory reported for a method only covers that method.
 export const METHODS: MethodEntry[] = [
+  { hotkey: 0, key: 'reference', label: 'Referencia (path tracing)', create: async () => new ReferencePathTracer() },
   { hotkey: 1, key: 'flat', label: 'Sin GI (ambiente plano)', create: async () => new FlatAmbient() },
 ];
 
