@@ -1,6 +1,8 @@
 import type { GIMethod } from './types';
 import { FlatAmbient } from './flat';
 import { ReferencePathTracer } from './reference';
+import { GTAOMethod } from './gtao';
+import { SSGIMethod } from './ssgi';
 
 export interface MethodEntry {
   /** Hotkey digit (0 = reference). */
@@ -15,6 +17,8 @@ export interface MethodEntry {
 export const METHODS: MethodEntry[] = [
   { hotkey: 0, key: 'reference', label: 'Referencia (path tracing)', create: async () => new ReferencePathTracer() },
   { hotkey: 1, key: 'flat', label: 'Sin GI (ambiente plano)', create: async () => new FlatAmbient() },
+  { hotkey: 2, key: 'gtao', label: 'GTAO (AO × ambiente)', create: async () => new GTAOMethod() },
+  { hotkey: 3, key: 'ssgi', label: 'SSGI (espacio de pantalla)', create: async () => new SSGIMethod() },
 ];
 
 export function findMethod(key: string): MethodEntry | undefined {

@@ -128,6 +128,7 @@ export class App {
       scene: this.scene,
       camera: this.camera,
       lights: this.lights,
+      gbuffer: this.gbuffer,
       width: RENDER_WIDTH,
       height: RENDER_HEIGHT,
       timer: this.timer,
@@ -219,14 +220,14 @@ export class App {
     this.gbuffer.render(renderer, this.scene, this.camera);
     timer.end('gbuffer+sombras');
 
-    const indirectA = this.methodA!.method.run(this.gbuffer);
+    const indirectA = this.methodA!.method.run(this.gbuffer, { prevFinal: this.compositeA.target.texture });
     timer.begin('composición');
     this.compositeA.render(renderer, indirectA);
     timer.end('composición');
 
     let indirectB: Texture | null = null;
     if (this.methodB) {
-      indirectB = this.methodB.method.run(this.gbuffer);
+      indirectB = this.methodB.method.run(this.gbuffer, { prevFinal: this.compositeB.target.texture });
       this.compositeB.render(renderer, indirectB);
     }
 

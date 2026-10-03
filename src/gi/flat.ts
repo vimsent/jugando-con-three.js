@@ -1,30 +1,27 @@
-import { Color, DataTexture, FloatType, RGBAFormat, type Texture } from 'three';
+import { DataTexture, DataUtils, HalfFloatType, RGBAFormat, type Texture } from 'three';
 import type GUI from 'lil-gui';
 import type { GIContext, GIMethod, GIStats } from './types';
+import { AmbientTerm } from './ambient';
 
 /** Method 1: no GI, a constant ambient term (classic "flat ambient"). */
 export class FlatAmbient implements GIMethod {
   readonly key = 'flat';
   readonly label = 'Sin GI (ambiente plano)';
-  private readonly tex = new DataTexture(new Float32Array(4), 1, 1, RGBAFormat, FloatType);
-  private readonly params = { color: '#9fb4d9', intensity: 0.25, followSky: true };
+  private readonly tex = new DataTexture(new Uint16Array(4), 1, 1, RGBAFormat, HalfFloatType);
+  private readonly ambient = new AmbientTerm();
   private ctx!: GIContext;
 
   async init(ctx: GIContext): Promise<void> {
     this.ctx = ctx;
-    this.refresh();
+    this.update();
   }
 
   update(): void {
-    this.refresh();
-  }
-
-  private refresh(): void {
-    const c = new Color(this.params.color).multiplyScalar(this.params.intensity);
-    if (this.params.followSky) c.multiplyScalar(this.ctx.lights.skyScale);
-    const d = this.tex.image.data as Float32Array;
-    if (d[0] !== c.r || d[1] !== c.g || d[2] !== c.b) {
-      d.set([c.r, c.g, c.b, 1]);
+    const c = this.ambient.update(this.ctx.lights);
+    const d = this.tex.image.data as Uint16Array;
+    const h = [c.r, c.g, c.b, 1].map((v) => DataUtils.toHalfFloat(v));
+    if (h.some((v, i) => v !== d[i])) {
+      d.set(h);
       this.tex.needsUpdate = true;
     }
   }
@@ -34,13 +31,11 @@ export class FlatAmbient implements GIMethod {
   }
 
   stats(): GIStats {
-    return { raysPerFrame: 0, memoryBytes: 16 };
+    return { raysPerFrame: 0, memoryBytes: 8 };
   }
 
   buildGui(folder: GUI): void {
-    folder.addColor(this.params, 'color').name('color');
-    folder.add(this.params, 'intensity', 0, 2, 0.01).name('intensidad');
-    folder.add(this.params, 'followSky').name('sigue al cielo');
+    this.ambient.buildGui(folder);
   }
 
   dispose(): void {

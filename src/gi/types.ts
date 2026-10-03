@@ -12,6 +12,7 @@ export interface GIContext {
   scene: Scene;
   camera: PerspectiveCamera;
   lights: SceneLights;
+  gbuffer: GBuffer;
   width: number;
   height: number;
   timer: GpuTimer;
@@ -47,8 +48,12 @@ export interface GIMethod {
   readonly label: string; // Spanish, shown in the HUD
   init(ctx: GIContext): Promise<void>;
   update(dt: number, info: FrameInfo): void;
-  /** Records the method's passes (wrapped in ctx.timer.begin/end) and returns the indirect texture. */
-  run(gbuffer: GBuffer): Texture;
+  /**
+   * Records the method's passes (wrapped in ctx.timer.begin/end) and returns the indirect texture.
+   * `history.prevFinal` is this slot's composite from the previous frame (linear HDR), used by
+   * screen-space methods as a multi-bounce light source.
+   */
+  run(gbuffer: GBuffer, history: { prevFinal: Texture }): Texture;
   stats(): GIStats;
   /** Adds the method's parameters to a lil-gui folder. */
   buildGui?(folder: GUI): void;
