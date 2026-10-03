@@ -1,0 +1,28 @@
+{
+  "name": "sponza-gi-lab",
+  "version": "1.0.0",
+  "description": "Toy Sponza GI comparison lab (three.js WebGPU)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "fetch-assets": "node scripts/fetch-sponza.mjs",
+    "capture": "node scripts/capture.mjs",
+    "bench": "node scripts/capture.mjs --bench"
+  },
+  "type": "module",
+  "dependencies": {
+    "lil-gui": "^0.21.0",
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.15"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "@webgpu/types": "^0.1.74",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  },
+  "private": true
+}

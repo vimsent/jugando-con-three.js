@@ -1,0 +1,6 @@
+html, body { margin: 0; height: 100%; background: #111; overflow: hidden; color: #ddd; font: 12px/1.35 ui-monospace, monospace; }
+#view { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+#hud { position: fixed; left: 8px; top: 8px; margin: 0; padding: 8px 10px; background: rgba(0,0,0,.6); border-radius: 4px; pointer-events: none; white-space: pre; }
+#msg { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: rgba(0,0,0,.7); padding: 6px 12px; border-radius: 4px; }
+#msg:empty { display: none; }
+#split-handle { position: fixed; top: 0; bottom: 0; width: 2px; background: #fff8; pointer-events: none; }
