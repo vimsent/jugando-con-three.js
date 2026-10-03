@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Mesh, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, DoubleSide, Mesh, Vector3 } from 'three';
 import { StorageBufferAttribute, StructTypeNode, type WebGPURenderer } from 'three/webgpu';
 import { storage, instancedArray } from 'three/tsl';
 import { MeshBVH, SAH } from 'three-mesh-bvh';
@@ -27,7 +27,7 @@ export const hitStruct = new StructTypeNode(
     geomNormal: 'vec3f', // geometric normal, facing the incoming ray
     triangle: 'uint',
     albedo: 'vec3f',
-    _pad: 'float',
+    flags: 'uint', // bit 0: front face hit, bit 1: double-sided material
   },
   'GIHit',
 );
@@ -231,6 +231,7 @@ export class RTScene {
         h.geomNormal = ng;
         h.triangle = res.indices.w;
         h.albedo = a.color.xyz;
+        h.flags = select( 0u, 1u, res.side > 0.0 ) | select( 0u, 2u, a.color.w > 0.5 );
         return h;
       }
     `;
@@ -432,7 +433,7 @@ function mergeWorldGeometry(sponza: SponzaScene): BufferGeometry {
   }
   const pos = new Float32Array(vtx * 3);
   const nrm = new Float32Array(vtx * 3);
-  const col = new Float32Array(vtx * 3);
+  const col = new Float32Array(vtx * 4); // rgb = average albedo, a = 1 for double-sided materials
   const index = new Uint32Array(idx);
   const v = new Vector3();
   let vo = 0;
@@ -441,13 +442,15 @@ function mergeWorldGeometry(sponza: SponzaScene): BufferGeometry {
     const g = m.geometry;
     const P = g.attributes.position;
     const N = g.attributes.normal;
-    const albedo = sponza.averageAlbedo.get(m.material as MeshLambertNodeMaterial)!;
+    const material = m.material as MeshLambertNodeMaterial;
+    const albedo = sponza.averageAlbedo.get(material)!;
+    const doubleSided = material.side === DoubleSide ? 1 : 0;
     for (let i = 0; i < P.count; i++) {
       v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld);
       pos.set([v.x, v.y, v.z], (vo + i) * 3);
       v.fromBufferAttribute(N, i).transformDirection(m.matrixWorld);
       nrm.set([v.x, v.y, v.z], (vo + i) * 3);
-      col.set([albedo.r, albedo.g, albedo.b], (vo + i) * 3);
+      col.set([albedo.r, albedo.g, albedo.b, doubleSided], (vo + i) * 4);
     }
     if (g.index) {
       for (let i = 0; i < g.index.count; i++) index[io + i] = g.index.getX(i) + vo;
@@ -461,7 +464,7 @@ function mergeWorldGeometry(sponza: SponzaScene): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(pos, 3));
   geometry.setAttribute('normal', new BufferAttribute(nrm, 3));
-  geometry.setAttribute('color', new BufferAttribute(col, 3));
+  geometry.setAttribute('color', new BufferAttribute(col, 4));
   geometry.setIndex(new BufferAttribute(index, 1));
   return geometry;
 }

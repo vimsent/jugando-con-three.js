@@ -3,6 +3,7 @@ import { FlatAmbient } from './flat';
 import { ReferencePathTracer } from './reference';
 import { GTAOMethod } from './gtao';
 import { SSGIMethod } from './ssgi';
+import { DDGIMethod } from './ddgi';
 
 export interface MethodEntry {
   /** Hotkey digit (0 = reference). */
@@ -19,6 +20,7 @@ export const METHODS: MethodEntry[] = [
   { hotkey: 1, key: 'flat', label: 'Sin GI (ambiente plano)', create: async () => new FlatAmbient() },
   { hotkey: 2, key: 'gtao', label: 'GTAO (AO × ambiente)', create: async () => new GTAOMethod() },
   { hotkey: 3, key: 'ssgi', label: 'SSGI (espacio de pantalla)', create: async () => new SSGIMethod() },
+  { hotkey: 4, key: 'ddgi', label: 'DDGI (probes)', create: async () => new DDGIMethod() },
 ];
 
 export function findMethod(key: string): MethodEntry | undefined {
