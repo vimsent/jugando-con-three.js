@@ -6,6 +6,7 @@ import { SSGIMethod } from './ssgi';
 import { DDGIMethod } from './ddgi';
 import { SharcMethod } from './sharc';
 import { DDGISSDOMethod } from './hybrid';
+import { ReSTIRGIMethod } from './restir';
 
 export interface MethodEntry {
   /** Hotkey digit (0 = reference). */
@@ -25,6 +26,7 @@ export const METHODS: MethodEntry[] = [
   { hotkey: 4, key: 'ddgi', label: 'DDGI (probes)', create: async () => new DDGIMethod() },
   { hotkey: 5, key: 'ddgi-ssdo', label: 'DDGI + SSDO', create: async () => new DDGISSDOMethod() },
   { hotkey: 6, key: 'sharc', label: 'Cache hash (tipo SHaRC)', create: async () => new SharcMethod() },
+  { hotkey: 7, key: 'restir', label: 'ReSTIR GI (simplificado)', create: async () => new ReSTIRGIMethod() },
 ];
 
 export function findMethod(key: string): MethodEntry | undefined {
