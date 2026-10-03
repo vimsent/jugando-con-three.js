@@ -54,6 +54,10 @@ export class GTAOMethod implements GIMethod {
     this.temporal?.reset();
   }
 
+  onCameraCut(): void {
+    this.reset();
+  }
+
   run(gbuffer: GBuffer): Texture {
     if (this.gbufferRef !== gbuffer) this.build(gbuffer);
     const { renderer, timer, camera } = this.ctx;

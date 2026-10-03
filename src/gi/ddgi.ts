@@ -489,9 +489,10 @@ export class DDGIMethod implements GIMethod {
   update(_dt: number, _info: FrameInfo): void {}
 
   reset(): void {
-    // DDGI lives in world space: camera jumps do not invalidate it. Explicit resets (key R) do.
     this.volume.reset();
   }
+
+  // DDGI lives in world space: camera cuts do not invalidate it (no onCameraCut handling).
 
   protected runVolumeAndGather(): Texture {
     const { renderer, timer, width, height } = this.ctx;
@@ -516,8 +517,9 @@ export class DDGIMethod implements GIMethod {
     const v = this.volume;
     return {
       raysPerFrame: this.rt.rayCountLast,
-      memoryBytes: ledger.total + this.rt.memoryBytes,
-      memoryBreakdown: { ...ledger.breakdown(), 'BVH + geometría': this.rt.memoryBytes },
+      memoryBytes: ledger.total,
+      sharedBytes: this.rt.memoryBytes,
+      memoryBreakdown: ledger.breakdown(),
       extra: {
         Probes: `${v.probeCount} (${v.params.countX}×${v.params.countY}×${v.params.countZ}), ${v.probesThisFrame}/frame × ${v.raysPerProbeBuilt} rayos`,
       },

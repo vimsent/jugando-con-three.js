@@ -11,6 +11,7 @@ export interface HudData {
   timerSupported: boolean;
   rays: number;
   memory: number;
+  shared: number;
   error: { rmse: number; rel: number; refSamples: number } | null;
   converge: string | null;
   extra: Record<string, string | number>;
@@ -39,7 +40,7 @@ export class Hud {
     for (const [name, ms] of d.passes) lines.push(`  ${name.padEnd(24)} ${ms.toFixed(3).padStart(8)}`);
     lines.push(`  ${'TOTAL'.padEnd(24)} ${d.gpuTotal.toFixed(3).padStart(8)}`);
     lines.push('');
-    lines.push(`Rayos/frame: ${fmtRays(d.rays)}   Memoria GI: ${formatBytes(d.memory)}`);
+    lines.push(`Rayos/frame: ${fmtRays(d.rays)}   Memoria GI: ${formatBytes(d.memory)}${d.shared ? ` (+ BVH compartido ${formatBytes(d.shared)})` : ''}`);
     if (d.error) {
       lines.push(`Error vs referencia (${d.error.refSamples} spp): RMSE ${d.error.rmse.toExponential(3)}  rel ${(d.error.rel * 100).toFixed(2)} %`);
     } else {

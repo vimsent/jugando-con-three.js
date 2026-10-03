@@ -82,7 +82,7 @@ export class Display {
       const toned = acesFilmicToneMapping(hdr, this.exposure);
       const ldr = select(m.equal(3), albedo, select(m.equal(4), normal, select(m.equal(5), select(this.hasRef.greaterThan(0), heat, vec3(0.2, 0, 0.2)), toned)));
       // Thin split line.
-      const line = abs(st.x.sub(this.split)).lessThan(float(0.0009)).and(this.split.lessThan(1) as never) as unknown as Node<'bool'>;
+      const line = abs(st.x.sub(this.split)).lessThan(float(0.0009)).and(this.split.lessThan(1).and(this.split.greaterThan(0)) as never) as unknown as Node<'bool'>;
       return vec4(select(line, vec3(1), ldr) as Node<'vec3'>, 1);
     })();
     this.quad = new QuadMesh(material);

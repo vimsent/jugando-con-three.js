@@ -32,7 +32,8 @@ export class ReferencePathTracer implements GIMethod {
   private readonly sppU = uniform(4, 'uint');
   private readonly bouncesU = uniform(8, 'uint');
   private samples = 0;
-  private frameCounter = 0;
+  // Random start so that two reference runs are statistically independent.
+  private frameCounter = Math.floor(Math.random() * 0x3fffffff);
   private readonly ledger = new MemoryLedger();
   private gbufferRef: GBuffer | null = null;
 
@@ -104,6 +105,10 @@ export class ReferencePathTracer implements GIMethod {
     this.samples = 0;
   }
 
+  onCameraCut(): void {
+    this.reset();
+  }
+
   run(gbuffer: GBuffer): Texture {
     if (this.gbufferRef !== gbuffer) this.build(gbuffer);
     const { renderer, timer, width, height } = this.ctx;
@@ -125,8 +130,9 @@ export class ReferencePathTracer implements GIMethod {
     const done = this.samples >= this.params.targetSpp;
     return {
       raysPerFrame: done ? 0 : this.rt.rayCountLast,
-      memoryBytes: this.ledger.total + this.rt.memoryBytes,
-      memoryBreakdown: { ...this.ledger.breakdown(), 'BVH + geometría': this.rt.memoryBytes },
+      memoryBytes: this.ledger.total,
+      sharedBytes: this.rt.memoryBytes,
+      memoryBreakdown: this.ledger.breakdown(),
       extra: { Muestras: `${this.samples} / ${this.params.targetSpp} spp${done ? ' (completa)' : ''}` },
     };
   }

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "fetch-assets": "node scripts/fetch-sponza.mjs",
     "capture": "node scripts/capture.mjs",
-    "bench": "node scripts/capture.mjs --bench"
+    "bench": "node scripts/capture.mjs --out results --bench --steps-file scripts/gallery-steps.json && node scripts/bench-report.mjs results/benchmark.json",
+    "bench:report": "node scripts/bench-report.mjs results/benchmark.json"
   },
   "type": "module",
   "dependencies": {

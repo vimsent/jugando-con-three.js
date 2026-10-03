@@ -76,6 +76,10 @@ export class DDGISSDOMethod extends DDGIMethod {
     this.aoTemporal.reset();
   }
 
+  onCameraCut(): void {
+    this.aoTemporal.reset();
+  }
+
   override run(gbuffer: GBuffer): Texture {
     const ddgi = this.runVolumeAndGather();
     const { renderer, timer, camera } = this.ctx;

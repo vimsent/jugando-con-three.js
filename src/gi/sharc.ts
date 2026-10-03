@@ -331,8 +331,12 @@ export class SharcMethod implements GIMethod {
   update(_dt: number, _info: FrameInfo): void {}
 
   reset(): void {
-    // The cache is world-space: camera jumps do not invalidate it. Explicit resets (key R) do.
     this.needsClear = true;
+    this.temporal.reset();
+  }
+
+  // The cache is world-space and survives camera cuts; only the screen-space history is dropped.
+  onCameraCut(): void {
     this.temporal.reset();
   }
 
@@ -382,8 +386,9 @@ export class SharcMethod implements GIMethod {
     const extraMem = this.params.temporal ? this.temporal.memoryBytes : 0;
     return {
       raysPerFrame: this.rt.rayCountLast,
-      memoryBytes: this.ledger.total + extraMem + this.rt.memoryBytes,
-      memoryBreakdown: { ...this.ledger.breakdown(), ...(extraMem ? { 'filtro temporal': extraMem } : {}), 'BVH + geometría': this.rt.memoryBytes },
+      memoryBytes: this.ledger.total + extraMem,
+      sharedBytes: this.rt.memoryBytes,
+      memoryBreakdown: { ...this.ledger.breakdown(), ...(extraMem ? { 'filtro temporal': extraMem } : {}) },
       extra: {
         'Tabla hash': `2^${this.params.log2Capacity} entradas, update 1/${this.params.updateTile ** 2} px × ${this.params.maxBounces} rebotes`,
       },

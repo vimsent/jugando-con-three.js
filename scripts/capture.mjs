@@ -9,7 +9,7 @@
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2);
 const arg = (name, def) => {
@@ -78,6 +78,7 @@ try {
     if (step.wait !== undefined) await waitFrames(step.wait);
     if (step.shot !== undefined) {
       const file = join(outDir, step.shot + '.png');
+      mkdirSync(dirname(file), { recursive: true });
       await page.locator('#view').screenshot({ path: file });
       const hud = await page.locator('#hud').innerText();
       writeFileSync(join(outDir, step.shot + '.hud.txt'), hud);

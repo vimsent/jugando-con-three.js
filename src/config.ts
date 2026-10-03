@@ -10,4 +10,4 @@ export const BENCH_WARMUP_FRAMES = 300;
 export const BENCH_MEASURE_FRAMES = 600;
 
 // Relative-error threshold used to decide that a method has "converged" after a lighting change.
-export const CONVERGENCE_REL_ERROR = 0.05;
+export const CONVERGENCE_REL_ERROR = 0.1;

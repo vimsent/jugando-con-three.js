@@ -8,7 +8,8 @@ import type { SceneLights } from '../scene/lights';
  * the hybrids): a sky-tinted color, optionally scaled with the sky brightness of the time of day.
  */
 export class AmbientTerm {
-  readonly params = { color: '#9fb4d9', intensity: 0.25, followSky: true };
+  // Default intensity = value calibrated against the reference by the benchmark (see README).
+  readonly params = { color: '#9fb4d9', intensity: 0.004, followSky: true };
   readonly uniform = uniform(new Color());
 
   update(lights: SceneLights): Color {

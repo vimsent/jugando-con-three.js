@@ -3,7 +3,7 @@ import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 
-import { RENDER_HEIGHT, RENDER_WIDTH, SPONZA_URL } from './config';
+import { CONVERGENCE_REL_ERROR, RENDER_HEIGHT, RENDER_WIDTH, SPONZA_URL } from './config';
 import { loadSponza, type SponzaScene } from './scene/sponza';
 import { SceneLights } from './scene/lights';
 import { BOOKMARKS, applyBookmark } from './scene/bookmarks';
@@ -19,6 +19,7 @@ import { RTScene } from './rt/rtScene';
 import { ErrorMetric, type ErrorResult } from './metrics/error';
 import { ReferenceCache, type ReferenceEntry } from './metrics/referenceCache';
 import type { ReferencePathTracer } from './gi/reference';
+import { Benchmark, type BenchmarkOptions } from './bench/benchmark';
 
 interface ActiveMethod {
   entry: MethodEntry;
@@ -45,6 +46,8 @@ export class App {
   errorMetric!: ErrorMetric;
   refCache!: ReferenceCache;
   lastError: ErrorResult | null = null;
+  private lightChangeFrame = 0;
+  private convergedAfter: number | null = null;
   methodA: ActiveMethod | null = null;
   methodB: ActiveMethod | null = null;
   readonly settings = {
@@ -52,7 +55,7 @@ export class App {
     compare: 'ninguno',
     view: 'final' as ViewMode,
     split: 0.5,
-    exposure: 1.6,
+    exposure: 4.0,
     bookmark: 0,
     paused: false,
   };
@@ -61,6 +64,7 @@ export class App {
   private lastTime = performance.now();
   private fpsAvg = 60;
   private lastCamMatrix = new Matrix4();
+  private seenLightVersion = -1;
   private rtScenePromise: Promise<RTScene> | null = null;
   private status = '';
   private switching = false;
@@ -176,9 +180,13 @@ export class App {
     this.timer.resetAverages();
   }
 
+  /** Parameter overrides applied to methods right after creation (set by the benchmark calibration). */
+  readonly methodOverrides: Record<string, (m: GIMethod) => void> = {};
+
   private async createActive(entry: MethodEntry, title: string): Promise<ActiveMethod> {
     const method = await entry.create();
     await method.init(this.context);
+    this.methodOverrides[entry.key]?.(method);
     const folder = this.gui ? this.gui.addFolder(`${title}: ${entry.label}`) : null;
     if (folder) method.buildGui?.(folder);
     return { entry, method, folder };
@@ -208,7 +216,12 @@ export class App {
     this.camera.updateMatrixWorld();
     const cameraMoved = !this.camera.matrixWorld.equals(this.lastCamMatrix);
     this.lastCamMatrix.copy(this.camera.matrixWorld);
-    const lightsChanged = this.lights.update(dt);
+    const lightsChanged = this.lights.update(dt) || this.lights.version !== this.seenLightVersion;
+    this.seenLightVersion = this.lights.version;
+    if (lightsChanged) {
+      this.lightChangeFrame = this.frame;
+      this.convergedAfter = null;
+    }
     this.sky.update(this.lights);
     const info: FrameInfo = { frame: this.frame, time: now(), cameraMoved, lightsChanged };
 
@@ -239,6 +252,10 @@ export class App {
       timer.end('métrica (no GI)');
     }
     this.lastError = ref ? this.errorMetric.last : null;
+    const le = this.lastError;
+    if (le && this.convergedAfter === null && le.frame > this.lightChangeFrame && le.rel < CONVERGENCE_REL_ERROR) {
+      this.convergedAfter = le.frame - this.lightChangeFrame;
+    }
 
     const compareRef = this.settings.compare === 'ref-img' && ref;
     this.display.split.value = this.methodB || compareRef ? this.settings.split : 1;
@@ -274,8 +291,13 @@ export class App {
       timerSupported: this.timer.supported,
       rays: stats.raysPerFrame,
       memory: stats.memoryBytes,
+      shared: stats.sharedBytes ?? 0,
       error: ref && this.lastError ? { rmse: this.lastError.rmse, rel: this.lastError.rel, refSamples: ref.spp } : null,
-      converge: null,
+      converge: ref
+        ? this.convergedAfter !== null
+          ? `${this.convergedAfter} frames tras el último cambio de luz (umbral ${CONVERGENCE_REL_ERROR * 100} %)`
+          : `aún no bajo ${CONVERGENCE_REL_ERROR * 100} % (${this.frame - this.lightChangeFrame} frames desde el cambio de luz)`
+        : null,
       extra: stats.extra ?? {},
       status: this.status,
     });
@@ -304,7 +326,7 @@ export class App {
    * Renders the ground truth for the current light state at the given bookmark(s) with the
    * reference path tracer and stores it in the cache. Animations are paused meanwhile.
    */
-  async generateReferences(bookmarks: number[] = [this.settings.bookmark], spp = 4096): Promise<{ key: string; spp: number; seconds: number }[]> {
+  async generateReferences(bookmarks: number[] = [this.settings.bookmark], spp = 4096, sppPerFrame = 8, keySuffix = ''): Promise<{ key: string; spp: number; seconds: number }[]> {
     const prevMethod = this.settings.method;
     const prevBookmark = this.settings.bookmark;
     const prevPaused = this.settings.paused;
@@ -314,6 +336,7 @@ export class App {
       await this.setMethod('reference');
       const ref = this.methodA!.method as ReferencePathTracer;
       ref.params.targetSpp = spp;
+      ref.params.sppPerFrame = sppPerFrame;
       for (const b of bookmarks) {
         this.gotoBookmark(b);
         const t0 = performance.now();
@@ -324,13 +347,14 @@ export class App {
           await this.waitFrames(1);
         }
         await this.waitFrames(1);
+        const key = this.referenceKey + keySuffix;
         await this.refCache.store(
           this.renderer,
-          { key: this.referenceKey, bookmark: b, lightKey: this.lights.stateKey, spp: ref.sampleCount },
+          { key, bookmark: b, lightKey: this.lights.stateKey, spp: ref.sampleCount },
           this.compositeA.target.texture,
           ref.outputTexture,
         );
-        out.push({ key: this.referenceKey, spp: ref.sampleCount, seconds: (performance.now() - t0) / 1000 });
+        out.push({ key, spp: ref.sampleCount, seconds: (performance.now() - t0) / 1000 });
       }
     } finally {
       this.setStatus('');
@@ -341,14 +365,19 @@ export class App {
     return out;
   }
 
+  /** Runs the full benchmark (see src/bench/benchmark.ts) and returns the JSON result. */
+  async runBenchmark(opts: BenchmarkOptions = {}): Promise<unknown> {
+    return new Benchmark(this).run(opts);
+  }
+
   // ---------------------------------------------------------------- camera / UI
 
   gotoBookmark(i: number): void {
     this.settings.bookmark = i;
     applyBookmark(this.camera, BOOKMARKS[i], this.controls.target);
     this.controls.update();
-    this.methodA?.method.reset?.();
-    this.methodB?.method.reset?.();
+    this.methodA?.method.onCameraCut?.();
+    this.methodB?.method.onCameraCut?.();
   }
 
   private buildGui(): void {
@@ -369,6 +398,25 @@ export class App {
     r.add(refOpts, 'spp', 256, 65536, 256).name('spp');
     r.add({ go: () => void this.generateReferences([this.settings.bookmark], refOpts.spp) }, 'go').name('generar (cámara actual)');
     r.add({ go: () => void this.generateReferences(BOOKMARKS.map((_, i) => i), refOpts.spp) }, 'go').name('generar (5 cámaras)');
+    r.add({ go: () => void this.refCache.clear() }, 'go').name('borrar referencias guardadas');
+
+    const b = gui.addFolder('Benchmark');
+    const benchOpts = { warmup: 300, measure: 600, refSpp: 2048, calibrate: true };
+    b.add(benchOpts, 'warmup', 0, 1000, 10).name('frames calentamiento');
+    b.add(benchOpts, 'measure', 10, 2000, 10).name('frames medidos');
+    b.add(benchOpts, 'refSpp', 256, 16384, 256).name('spp referencia');
+    b.add(benchOpts, 'calibrate').name('calibrar parámetros libres');
+    b.add({
+      go: async () => {
+        const result = await this.runBenchmark(benchOpts);
+        const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'benchmark.json';
+        a.click();
+      },
+    }, 'go').name('ejecutar y descargar JSON');
+    b.close();
 
     const l = gui.addFolder('Luces');
     const p = this.lights.params;

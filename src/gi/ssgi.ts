@@ -32,7 +32,7 @@ export class SSGIMethod implements GIMethod {
   private temporal!: TemporalFilter;
   private readonly beautyNode = texture(new Texture());
   private readonly giScale = uniform(1.0);
-  readonly params = { source: 'final previo', sliceCount: 2, stepCount: 8, radius: 12, giIntensity: 3, aoIntensity: 1, thickness: 0.5, backfaceLighting: 0 };
+  readonly params = { source: 'final previo', sliceCount: 2, stepCount: 8, radius: 12, giIntensity: 8, aoIntensity: 1, thickness: 0.5, backfaceLighting: 0 };
 
   async init(ctx: GIContext): Promise<void> {
     this.ctx = ctx;
@@ -60,6 +60,10 @@ export class SSGIMethod implements GIMethod {
 
   reset(): void {
     this.temporal.reset();
+  }
+
+  onCameraCut(): void {
+    this.reset();
   }
 
   run(gbuffer: GBuffer, history: { prevFinal: Texture }): Texture {

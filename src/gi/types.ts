@@ -22,7 +22,10 @@ export interface GIContext {
 
 export interface GIStats {
   raysPerFrame: number;
+  /** Bytes of textures and buffers owned by the method (excludes the shared BVH). */
   memoryBytes: number;
+  /** Bytes of shared resources the method needs (the BVH + geometry for ray-traced methods). */
+  sharedBytes?: number;
   memoryBreakdown?: Record<string, number>;
   extra?: Record<string, string | number>;
 }
@@ -57,8 +60,10 @@ export interface GIMethod {
   stats(): GIStats;
   /** Adds the method's parameters to a lil-gui folder. */
   buildGui?(folder: GUI): void;
-  /** Drops temporal history (bookmark jump, method switch, explicit reset). */
+  /** Drops all history, including world-space caches (key R, GUI). */
   reset?(): void;
+  /** Camera cut (bookmark jump): drops screen-space history only; world-space caches survive. */
+  onCameraCut?(): void;
   dispose(): void;
 }
 
