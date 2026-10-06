@@ -49,7 +49,7 @@ export class Hud {
     if (d.converge) lines.push(`Convergencia: ${d.converge}`);
     for (const [k, v] of Object.entries(d.extra)) lines.push(`${k}: ${v}`);
     if (d.status) lines.push('', d.status);
-    lines.push('', '[0-7] método  [Shift+1-5] cámara  [V] vista  [S] split  [R] reset  [H] HUD');
+    lines.push('', 'Clic: capturar ratón  WASD mover  Espacio/Shift subir/bajar  Ctrl o 2×W sprint  Rueda velocidad  Esc soltar', '[0-7] método  [Shift+1-5] cámara  [V] vista  [X] split  [R] reset  [H] HUD');
     this.el.textContent = lines.join('\n');
   }
 }

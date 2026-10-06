@@ -15,9 +15,8 @@ export const BOOKMARKS: CameraBookmark[] = [
   { name: 'Vista elevada', position: [9.5, 6.6, 0], target: [-8, 1.2, 0] },
 ];
 
-export function applyBookmark(camera: PerspectiveCamera, b: CameraBookmark, controlsTarget?: Vector3): void {
+export function applyBookmark(camera: PerspectiveCamera, b: CameraBookmark): void {
   camera.position.set(...b.position);
   camera.lookAt(new Vector3(...b.target));
   camera.updateMatrixWorld();
-  controlsTarget?.set(...b.target);
 }

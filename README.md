@@ -45,8 +45,10 @@ npm run fetch-assets   # descarga Sponza (~50 MB) a public/assets/sponza
 npm run dev            # http://localhost:5173
 ```
 
-Controles: `1`–`7` método, `0` referencia, `Shift+1`–`5` bookmarks de cámara, `V` modo de vista,
-`S` split A|B, `R` reinicia el historial temporal, `H` oculta el HUD. El resto de los parámetros
+Cámara estilo espectador de Minecraft: clic en el canvas captura el ratón (mirar), `WASD` mueve en
+horizontal, `Espacio`/`Shift` sube/baja, `Ctrl` o doble `W` acelera, la rueda cambia la velocidad y
+`Esc` suelta el ratón. Controles: `1`–`7` método, `0` referencia, `Shift+1`–`5` bookmarks de cámara, `V` modo de vista,
+`X` split A|B, `R` reinicia el historial temporal, `H` oculta el HUD. El resto de los parámetros
 está en el panel lil-gui.
 
 `npm run capture` abre la app en Chromium headless (Playwright) sobre la GPU real y guarda

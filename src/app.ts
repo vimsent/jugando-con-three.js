@@ -1,12 +1,12 @@
 import { Matrix4, PerspectiveCamera, Scene, Texture } from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 
 import { CONVERGENCE_REL_ERROR, RENDER_HEIGHT, RENDER_WIDTH, SPONZA_URL } from './config';
 import { loadSponza, type SponzaScene } from './scene/sponza';
 import { SceneLights } from './scene/lights';
 import { BOOKMARKS, applyBookmark } from './scene/bookmarks';
+import { SpectatorControls } from './scene/spectator';
 import { GBuffer } from './render/gbuffer';
 import { Composite } from './render/composite';
 import { Display, VIEW_MODES, type ViewMode } from './render/display';
@@ -31,7 +31,7 @@ export class App {
   renderer!: WebGPURenderer;
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(60, RENDER_WIDTH / RENDER_HEIGHT, 0.05, 120);
-  controls!: OrbitControls;
+  controls!: SpectatorControls;
   lights!: SceneLights;
   sponza!: SponzaScene;
   gbuffer!: GBuffer;
@@ -107,8 +107,7 @@ export class App {
     this.scene.add(this.sponza.root);
     this.lights = new SceneLights(this.scene);
 
-    this.controls = new OrbitControls(this.camera, this.canvas);
-    this.controls.enableDamping = false;
+    this.controls = new SpectatorControls(this.camera, this.canvas);
     this.gotoBookmark(0);
 
     this.gbuffer = new GBuffer(RENDER_WIDTH, RENDER_HEIGHT);
@@ -205,6 +204,7 @@ export class App {
     const dt = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
     this.fpsAvg = this.fpsAvg * 0.95 + (1 / Math.max(dt, 1e-4)) * 0.05;
+    this.controls.update(dt);
     if (this.switching || !this.methodA) return;
     this.renderFrame(this.settings.paused ? 0 : dt);
   }
@@ -212,7 +212,6 @@ export class App {
   /** Renders one frame. Exposed for deterministic stepping from the benchmark. */
   renderFrame(dt: number): void {
     this.frame++;
-    this.controls.update();
     this.camera.updateMatrixWorld();
     const cameraMoved = !this.camera.matrixWorld.equals(this.lastCamMatrix);
     this.lastCamMatrix.copy(this.camera.matrixWorld);
@@ -374,8 +373,7 @@ export class App {
 
   gotoBookmark(i: number): void {
     this.settings.bookmark = i;
-    applyBookmark(this.camera, BOOKMARKS[i], this.controls.target);
-    this.controls.update();
+    applyBookmark(this.camera, BOOKMARKS[i]);
     this.methodA?.method.onCameraCut?.();
     this.methodB?.method.onCameraCut?.();
   }
@@ -454,7 +452,7 @@ export class App {
           this.settings.view = VIEW_MODES[(i + 1) % VIEW_MODES.length];
           break;
         }
-        case 'KeyS':
+        case 'KeyX':
           this.settings.split = this.settings.split < 1 ? 1 : 0.5;
           break;
         case 'KeyR':
